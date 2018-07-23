@@ -1,0 +1,4 @@
+# Ignore Matlab autosave files
+*.m~
+# Ignore compiled python modules
+*.pyc
