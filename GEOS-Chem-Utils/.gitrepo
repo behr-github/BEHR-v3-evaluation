@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = git@github:behr-github/GEOS-Chem-Utils.git
+	branch = master
+	commit = f01cd5a54d3e9717703d71c91df3acf52496c66a
+	parent = 0395f45d661c054e405b933de4625897636a28b0
+	method = merge
+	cmdver = 0.4.0
