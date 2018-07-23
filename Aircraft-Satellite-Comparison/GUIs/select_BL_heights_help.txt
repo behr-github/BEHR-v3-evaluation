@@ -1,0 +1,9 @@
+By default, all profiles will identify the boundary layer height determined by "find_bdy_layer_height" using either the "max" or "theta" methods.
+
+If a profile should not be used in BL heights at all, click the "Reject" button under the correct axes.  (To undo this, click it again - it will then say "Accept");
+
+BL heights can be manually guided by adding ranges that the "find_bdy_layer_height" algorithm should search in.  Add and manipulate these ranges using the buttons to the left of each axes. Multiple ranges can be specified, and the algorithm will return a height for each range.  Once ranges are specified, use the "Reevaluate BL Height" button to recalculate the BL heights.
+
+Quality flags are set to identify manual intervention.  To return to the fully automatic BL height determination, delete all ranges for that field and reevaluate the heights.
+
+Almost all fields find their BL height by searching for the greatest difference between 2 layers.  However any field name that includes "THETA" will use the potential temperature method.  NOTE: when specifying manual ranges for a THETA field, the THETALITE method is used.

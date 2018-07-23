@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = git@github:behr-github/Aircraft-Satellite-Comparison.git
+	branch = master
+	commit = d1aaaf527ba4e8e2518ede25243dcfa1320559ed
+	parent = f1892ec1cbe55e586122fefc458d374b7f392436
+	method = merge
+	cmdver = 0.4.0
