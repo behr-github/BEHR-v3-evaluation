@@ -1,0 +1,4 @@
+# Ignore matlab autosave files
+*.m~
+# Ignore the behr_paths.m file, as it should be unique to each computer
+Utils/Constants/behr_paths.m
