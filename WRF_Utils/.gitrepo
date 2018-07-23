@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = git@github:CohenBerkeleyLab/WRF_Utils.git
+	branch = josh-dev
+	commit = a2ca228bba44657a6785b0656860aaf13430e468
+	parent = 39249ffc2b35ee5f239c7c78e82fb3587554ace3
+	method = merge
+	cmdver = 0.4.0
