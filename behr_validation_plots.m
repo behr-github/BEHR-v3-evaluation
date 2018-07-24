@@ -308,7 +308,7 @@ uncertainty_plot();
 
     function uncertainty_plot()
         fig = misc_behr_v3_validation.plot_uncertainty_estimate('change_field', 'PercentChangeNO2','normalize_by','None','titles',false);
-        save_all_the_formats(fig, 'Uncertainty', false);
+        save_all_the_formats(fig, 'Uncertainty', true);
     end
 
     function prof_r2_plots
@@ -321,9 +321,6 @@ uncertainty_plot();
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     function generate_comparison_data()
-        % This assumes that you have parsed ICARTT files for all the
-        % necessary aircraft and Pandora data using 
-        
         if trop_test
             extra_opts = {'v3_dir', '/Volumes/share-sat/SAT/BEHR/BEHR_Files_SPandTrop_Test/'};
         else

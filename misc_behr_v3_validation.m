@@ -2947,7 +2947,7 @@ classdef misc_behr_v3_validation
                     contribution_quantiles(:, i_month, i_param) = quantile(abs(this_norm_perdiff),[0.05;0.95]);
                 end
                 subplot(3,2,i_month);
-                perdiff = sqrt(pAvg.getWeightedAverage());
+                perdiff = sqrt(pAvg.values());
                 mean_contributions(i_month, end) = nanmean(abs(perdiff(:)));
                 contribution_sigmas(i_month, end) = nanstd(abs(perdiff(:)));
                 median_contributions(i_month, end) = nanmedian(abs(perdiff(:)));
