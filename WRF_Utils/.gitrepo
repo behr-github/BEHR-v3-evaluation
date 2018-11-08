@@ -6,7 +6,7 @@
 [subrepo]
 	remote = git@github:CohenBerkeleyLab/WRF_Utils.git
 	branch = josh-dev
-	commit = a2ca228bba44657a6785b0656860aaf13430e468
-	parent = 39249ffc2b35ee5f239c7c78e82fb3587554ace3
+	commit = 193250cad500c003b27f6e07cb066bf565f03c99
+	parent = a7571bc4f02c1390a23f39917b625f5c734b4bec
 	method = merge
 	cmdver = 0.4.0
