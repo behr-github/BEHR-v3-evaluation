@@ -32,12 +32,15 @@ function varargout = scatter_grouped(values, varargin)
 %       the clusters are spaced out along the x-axis and the values given
 %       are plotted along the y-axis. Can also be 'x', which reverses this.
 
+E = JLLErrors;
+
 p = advInputParser;
 p.addOptional('lower_errors',[]);
 p.addOptional('upper_errors',[]);
 p.addParameter('group_fmt', []);
 p.addParameter('error_bar_fmt', []);
 p.addParameter('data_axis','y');
+p.addParameter('width', 0.25);
 
 p.parse(varargin{:});
 pout = p.Results;
@@ -47,12 +50,19 @@ upper_errors = pout.upper_errors;
 group_fmt = pout.group_fmt;
 error_bar_fmt = pout.error_bar_fmt;
 data_axis = pout.data_axis;
+cluster_width = pout.width;
 
 if isempty(group_fmt)
     group_fmt = struct('marker', {'o','x','^','v','*'});
 end
 if isempty(error_bar_fmt)
     error_bar_fmt = struct('color', 'k');
+end
+
+if ~isscalar(cluster_width) || ~isnumeric(cluster_width)
+    E.badinput('"cluster_width" must be a scalar number');
+elseif cluster_width <= 0 || cluster_width >= 0.5
+    E.badinput('"cluster_width" must be between 0 and 0.5 (exclusive)');
 end
 
 % Repeat the group format structure enough to cover all groups needed
@@ -70,9 +80,8 @@ error_bar_fmt = repmat(error_bar_fmt(:), n_reps_eb, 1);
 
 % First calculate the coordinates for the groups, assuming that each
 % cluster of points will be centered around 1, 2, 3, etc. and will spread
-% out to +/- 0.25 to either side so that there is a gap between clusters.
+% out to +/- 0.25 (by default) to either side so that there is a gap between clusters.
 
-cluster_width = 0.25;
 coords = repmat((1:n_clusters)',1,n_groups);
 offsets = linspace(-cluster_width, cluster_width, n_groups);
 offsets = repmat(offsets,n_clusters,1);

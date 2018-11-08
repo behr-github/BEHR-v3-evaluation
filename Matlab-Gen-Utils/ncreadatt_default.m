@@ -84,7 +84,7 @@ catch attr_err
                 default_str = default;
             end
         
-            fprintf('\tAssuming "%s" for attribute "%s" not found in variable "%s" of file "%s".\n', attribute, variable, filename, default_str); 
+            fprintf('\tAssuming "%s" for attribute "%s" not found in variable "%s" of file "%s".\n', default_str, attribute, variable, filename); 
         end
         attr_val = default;
     else

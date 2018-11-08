@@ -28,6 +28,10 @@ if ~ischar(formatstr)
     E.badinput('FORMATSTR must be a string')
 end
 
+% Check that every value to insert into the string has the same number of
+% elements or is scalar (and so should be put into every string). We have
+% to check character arrays specially, because they have a length >= 1, but
+% should be treated as a scalar.
 n_el = nan(1, numel(varargin));
 for i=1:numel(varargin)
     if ischar(varargin{i})
@@ -39,6 +43,13 @@ end
 u_n_el = unique(n_el(n_el~=1));
 if numel(u_n_el) > 1
     E.badinput('All additional array arguments to SPRINTFMULTI must have the same number of elements')
+end
+
+% If there are only scalar values, then the call to unique() will return an
+% empty array, which causes repmat to issue a warning or error in versions
+% of matlab after 2017.
+if isempty(u_n_el)
+    u_n_el = 1;
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%

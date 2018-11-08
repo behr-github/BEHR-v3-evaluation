@@ -74,7 +74,7 @@ function [ our_args, hist_args] = parse_args(varargin)
 % expecting parameters but gets positional args
 param_struct = struct('fontsize',[]);
 fns = fieldnames(param_struct);
-our_args = [];
+our_args = struct();
 our_args_idx = false(size(varargin));
 for i_fn = 1:numel(fns)
     xx = find(strcmpi(fns{i_fn}, varargin), 1, 'last');
