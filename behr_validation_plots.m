@@ -27,20 +27,24 @@ if ask_yn('Regenerate intermediate data? This will overwrite any existing files.
     generate_comparison_data();
 end
 
+plot_surfp_diff()
+
 senex_seac4rs_caption = 'Slopes and 1$\sigma$ uncertainties for RMA regression of satellite VCDs against in situ calculated VCDs. Both methods of extending the profiles (using GEOS-Chem modeled profiles or extrapolating the top/bottom ten points) are included. Outliers are removed before calculating these parameters.';
 insert_vcd_insitu_table(ltng_validation_campaigns, false, 'aircraft',  senex_seac4rs_caption, 'tab:vcd-insitu-stats', paper_tex_file, 'SENEX-SEAC4RS-TABLE', 'fit_vals', 'std. dev.');
-
+ 
 aircraft_caption = 'Slopes, intercepts, and $R^2$ values for RMA regression of satellite VCDs against in situ calculated VCDs. Outliers are removed before calculating these parameters; negative VCDs are retained unless noted.';
 insert_vcd_insitu_table(all_vcd_val_campaigns, remove_neg_vcds_all, 'aircraft',  aircraft_caption, 'tab:supp:vcd-insitu-stats', supp_tex_file, 'VCDTABLE', 'env', 'sidewaystable', 'center', true, 'fit_vals', 'int+R2');
 pandora_caption = 'Slopes, intercepts, and $R^2$ values for RMA regression of satellite VCDs against Pandora VCDs. Outliers are removed before calculating these parameters.';
 insert_vcd_insitu_table(discover_campaigns, remove_neg_vcds_discover, 'pandora', pandora_caption, 'tab:supp:vcd-pandora-stats', supp_tex_file, 'PANDORATABLE', 'center', true, 'fit_vals', 'int+R2');
-
+ 
 main_avg_caption = 'Slopes and 1$\sigma$ uncertainties of BEHR vs. combined aircraft (extended with GEOS-Chem profiles) and Pandora VCDs. Matched slopes use only Pandora data approximately coincident with aircraft profiles to get similar sampling; all uses all valid Pandora data. Outliers and negative VCDs are removed before computing slopes.';
 make_avg_table(paper_tex_file, 'tab:vcd-avg-slopes', main_avg_caption, 'AVGTABLE', 'fit_vals', 'std. dev.');
 make_avg_table(supp_tex_file, 'tab:supp:vcd-avg-slopes-intR2', main_avg_caption, 'AVGTABLE-SUPP', 'fit_vals', 'int+R2', 'center', true, 'env', sidewaystable);
-
+ 
 make_individual_scatter_plots();
 plot_scd_comparisons()
+wrf_emis_change();
+profile_mean_bias_table();
 plot_average_wrf_profiles();
 prof_r2_plots()
 make_special_lightning_scatter();
@@ -50,6 +54,29 @@ uncertainty_plot();
 %%%%%%%%%%%%%%%%%%%%%%%%%
 % Plotting subfunctions %
 %%%%%%%%%%%%%%%%%%%%%%%%%
+    function profile_mean_bias_table()
+        campaigns = get_available_campaigns_wrf_profs(profile_campaigns);
+        xx_seac4rs = strcmp(campaigns, 'seac4rs');
+        no_seac4rs = campaigns(~xx_seac4rs);
+        
+        bl_pres = [1100 775];
+        ut_pres = [775 0];
+        mab_bl = misc_behr_v3_validation.tabulate_profile_mab(campaigns, 'bias_output', 'total', 'pres_range', bl_pres);
+        mab_bl_nosec = misc_behr_v3_validation.tabulate_profile_mab(no_seac4rs, 'bias_output', 'total', 'pres_range', bl_pres);
+        mab_ut = misc_behr_v3_validation.tabulate_profile_mab(campaigns, 'bias_output', 'total', 'pres_range', ut_pres);
+        mab_ut_nosec = misc_behr_v3_validation.tabulate_profile_mab(no_seac4rs, 'bias_output', 'total', 'pres_range', ut_pres);
+        
+        A = [struct2array(mab_bl)', struct2array(mab_bl_nosec)', struct2array(mab_ut)', struct2array(mab_ut_nosec)'];
+        fprintf('Here''s the table--will just put in paper manually:\n');
+        T = array2table(A, 'RowNames', fieldnames(mab_bl), 'VariableNames', {'BL','BL_NoSEAC4RS','UT','UT_NoSEAC4RS'})
+        
+        
+    end
+
+    function wrf_emis_change()
+        fig = misc_behr_v3_validation.behr_v2_vs_v3_emis();
+        save_all_the_formats(fig, 'v2-v3-no-emis-change', true);
+    end
 
     function plot_average_wrf_profiles()
        [campaigns, has_daily] = get_available_campaigns_wrf_profs(profile_campaigns);
@@ -60,7 +87,7 @@ uncertainty_plot();
            else
                prof_types = {'monthly', 'v2'};
            end
-           figs(i_campaign) = misc_behr_v3_validation.plot_one_wrf_comparison(prof_types, campaigns{i_campaign}, 'All', 'std', 'bin_mode', 'mean');
+           [figs(i_campaign), profiles] = misc_behr_v3_validation.plot_one_wrf_comparison(prof_types, campaigns{i_campaign}, 'All', 'std', 'bin_mode', 'mean');
            %title(strrep(upper(campaigns{i_campaign}),'_',' '));
            title('');
            ax = gca;
@@ -171,6 +198,34 @@ uncertainty_plot();
         make_latex_table(values, 'colnames', colnames, 'rownames', rownames, 'insert', true, 'marker', insert_marker, 'file', tex_file,...
            'caption', tex_caption, 'label', tex_label, 'lines', {'\tophline','\middlehline','\bottomhline'}, 'extra_hlines', extra_hlines,  'm2l', m2l, 'environment', environment, 'center', center);
     end
+
+    function plot_surfp_diff()
+        data_opts = {'data_source','aircraft','extend_method','geos','x_var','air_no2_behr','y_var','behr_no2',...
+            'prof_mode','daily','campaigns',{'discover_co'},'time_range','t1200_1500','version','v3'};
+        scale_ht_dir = fullfile(misc_behr_v3_validation.validation_root_dir, 'VCD-Comparison','WRF-Tropopause');
+        [fit_data_hypso, ~, ~, ~, x_hypso, y_hypso] = misc_behr_v3_validation.calculate_fit('load-combined', [data_opts, 'match', true, 'alt_dir', {''}], 'remove_outliers', true, 'remove_neg_sat', true, 'force_origin', false);
+        [fit_data_scaleht, ~, ~, ~, x_scaleht, y_scaleht] = misc_behr_v3_validation.calculate_fit('load-combined', [data_opts, 'match', true, 'alt_dir', scale_ht_dir], 'remove_outliers', true, 'remove_neg_sat', true, 'force_origin', false);
+        
+        lims = [0 2e16];
+        fig = figure;
+        l = gobjects(4,1);
+        l(1) = line(x_scaleht{1}, y_scaleht{1}, 'marker', 'o', 'markersize', 10, 'linestyle', 'none', 'linewidth', 1, 'color', 'b');
+        l(2) = line(lims, fit_data_scaleht.P(1) .* lims + fit_data_scaleht.P(2), 'linestyle', '--', 'linewidth', 2, 'color', 'b');
+        l(3) = line(x_hypso{1}, y_hypso{1}, 'marker', '^', 'markersize', 10, 'linestyle', 'none', 'linewidth', 1, 'color', 'r');
+        l(4) = line(lims, fit_data_hypso.P(1) .* lims + fit_data_hypso.P(2), 'linestyle', '--', 'linewidth', 2, 'color', 'r');
+        line(lims, lims, 'linestyle', ':', 'linewidth', 2, 'color', 'k');
+        
+        xylims(lims);
+        scaleht_str = sprintf('Fit (%.2fx + %.2g)', fit_data_scaleht.P(1), fit_data_scaleht.P(2));
+        hypso_str = sprintf('Fit (%.2fx + %.2g)', fit_data_hypso.P(1), fit_data_hypso.P(2));
+        legend(l, {'Scale height', scaleht_str, 'Hypsometric eqn.', hypso_str})
+        xlabel('Aircraft/Pandora NO_2 VCDs (molec. cm^{-2})');
+        ylabel('BEHR v3.0 (D) NO_2 VCDs (molec. cm^{-2})');
+        set(gca, 'fontsize', 12, 'xtick', lims(1):5e15:lims(2), 'ytick', lims(1):5e15:lims(2));
+        reset_fig_size(fig);
+        
+        save_all_the_formats(fig, 'Hypsometric-SurfP-Comparison', true);
+    end
     
     function plot_scd_comparisons()
         results_file = fullfile(misc_behr_v3_validation.scd_comp_dir, 'scd_daily_2018-05-11_15-17-00.mat');
@@ -193,7 +248,7 @@ uncertainty_plot();
     end
 
     function make_individual_scatter_plots()
-        campaigns = vcd_validation_campaigns;
+        campaigns = all_vcd_val_campaigns;
         for i_cam = 1:numel(campaigns)
             subfigs = gobjects(0);
             common_air_opts = {'data_source', 'aircraft', 'prof_mode', 'both', 'version', 'both', 'campaigns', campaigns{i_cam}, 'time_range', 't1200_1500',...
