@@ -1,4 +1,4 @@
-function [ values, lon_grid, lat_grid ] = behr_time_average( start_date, end_date, varargin  )
+function [ values, lon_grid, lat_grid, weights ] = behr_time_average( start_date, end_date, varargin  )
 %BEHR_TIME_AVERAGE Average version 3 BEHR data over time.
 %   Version 3 of BEHR changed how gridding data is done, therefore this
 %   function supplants no2_column_map_2014 for time averaging. The most
@@ -216,7 +216,7 @@ grid_var = 'OMI';
 
 F = dir(fullfile(behr_dir, file_pattern));
 if isempty(F)
-    E.filenotfound('Files matching %s in %s', file_pattern, behr_dir);
+    E.filenotfound('No files matching %s in %s', file_pattern, behr_dir);
 end
 
 first_file = true;
