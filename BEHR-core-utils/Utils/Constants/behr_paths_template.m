@@ -36,6 +36,12 @@ classdef behr_paths_template
     % If you're working with BEHR on a cluster, you likely won't need to
     % deal with networked drives, and everything will have a
     % straightforward path.
+    %
+    % Important note: the python automation that runs BEHR automatically
+    % can't handle when a cell array containing multiple paths is split
+    % over >1 line. If you need to split a cell array over multiple lines,
+    % either don't or fix the Python program (currently in BEHR-Automation
+    % repo: behr_automation.behr_runner.utils.BEHRPaths)
     
     properties(Constant=true)
         %#PATHS

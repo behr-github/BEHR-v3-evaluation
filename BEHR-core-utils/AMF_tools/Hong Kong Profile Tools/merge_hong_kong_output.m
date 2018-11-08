@@ -90,11 +90,14 @@ var_mapping = struct('NO2', 'no2',...
     'PH', 'PH',...
     'PHB', 'PHB');
 
+% List extra variables that are created in this function here.
+extra_vars = {'z_center'};
+
 % These give the size of the CMAQ and WRF grids in the initial week of data
 % that Hugo sent. They will be used to check if the input data is from that
 % week and so the WRF and CMAQ grids need reconciled
 hk_wrf_sz = [222, 162, 38];
-hk_cmaq_sz = [98, 74, 26];
+hk_cmaq_sz = [98, 74, 28];
 
 % If the grids are the size for the Hong Kong focused run, cut them
 % down according to the information I got from Hugo Mak on 1 Nov 2017:
@@ -134,9 +137,24 @@ hk_cmaq_sz = [98, 74, 26];
 %   For x variable, from 20th to 117th entry, so it becomes dimension
 %   of 98 For y variable, from 35th to 108th entry, so it becomes
 %   dimension of 74"
+%
+% The other problem is that the CMAQ profiles don't go high enough for the
+% WRF temperature profiles to reach the tropopause (though they are close).
+% So we actually need the last two layers from the WRF variables as well. 
+% We can either fill in those layers in the NO2 profile by assuming that
+% they are equal to the top CMAQ box or by using a monthly mean GEOS-Chem
+% profile to get the shape.
 hk_x_cut = 20:117;
 hk_y_cut = 35:108;
-hk_z_cut = [1:20, 21, 23, 25, 28, 32, 36];
+hk_z_cut = [1:20, 21, 23, 25, 28, 32, 36:38];
+
+if numel(hk_x_cut) ~= hk_cmaq_sz(1)
+    E.callError('inconsistent_cmaq_cut', 'The x_cut and first CMAQ length are inconsistent')
+elseif numel(hk_y_cut) ~= hk_cmaq_sz(2)
+    E.callError('inconsistent_cmaq_cut', 'The y_cut and second CMAQ length are inconsistent')
+elseif numel(hk_z_cut) ~= hk_cmaq_sz(3)
+    E.callError('inconsistent_cmaq_cut', 'The z_cut and third CMAQ length are inconsistent')
+end
 
 datevec = datenum(start_date):datenum(end_date);
 for d=1:numel(datevec)
@@ -189,10 +207,17 @@ end
         
         input_info = match_cmaq_wrf_schema_grids(input_info);
         
+        % Copy a non-staggered variable for z_center
+        input_info.z_center = make_new_schema(input_info.P, 'z_center', {'description', 'altitude derived from geopotential at model box center', 'units', 'm'});
+        
         ncwriteschema(output_file, input_info.LON);
         ncwriteschema(output_file, input_info.LAT);
         for f=1:numel(fns)
             ncwriteschema(output_file, input_info.(fns{f}));
+        end
+        
+        for i_var=1:numel(extra_vars)
+            ncwriteschema(output_file, input_info.(extra_vars{i_var}));
         end
     end
 
@@ -208,6 +233,12 @@ end
         data_struct.LON = lon_array;
         data_struct.LAT = lat_array;
         
+        % Add the z_center variable - since we are subsetting PH and PHB
+        % next, if we want z at the center of grid cells, we need to
+        % compute it while we have all the model layers
+        z = calculate_wrf_altitude({data_struct.PH, data_struct.PHB});
+        data_struct.z_center = (z(:,:,1:end-1,:) + z(:,:,2:end,:))/2;
+        
         % Match up the CMAQ and WRF outputs
         data_struct = match_cmaq_wrf_data_grids(data_struct);
         
@@ -217,20 +248,56 @@ end
         for f=1:numel(fns)
             ncwrite(output_file, var_mapping.(fns{f}), data_struct.(fns{f}));
         end
+        
+        for i_var=1:numel(extra_vars)
+            this_var = extra_vars{i_var};
+            ncwrite(output_file, this_var, data_struct.(this_var));
+        end
     end
 
     function data = match_cmaq_wrf_data_grids(data)
-        if all_sizes_equal(data)
-            % If all the grids are the right size (accounting for 2D grids), we can
-            % return data unaltered
-            return
-        elseif isequal(size(data.NO2), hk_cmaq_sz) && isequal(size(data.LON), hk_cmaq_sz(1:2)) && isequal(size(data.LAT), hk_cmaq_sz(1:2)) && isequal(size(data.P), hk_wrf_sz) && isequal(size(data.PB), hk_wrf_sz) && isequal(size(data.T), hk_wrf_sz)
-            data.P = data.P(hk_x_cut, hk_y_cut, hk_z_cut);
-            data.PB = data.PB(hk_x_cut, hk_y_cut, hk_z_cut);
-            data.T = data.T(hk_x_cut, hk_y_cut, hk_z_cut);
-        else
-            E.callError('undef_grid', 'No subsetting defined for CMAQ/WRF grid sizes of %s vs. %s', mat2str(size(data.NO2)), mat2str(size(data.P)));
+        
+        data_fns = fieldnames(data);
+        bt_stagger_size = hk_wrf_sz;
+        bt_stagger_size(3) = bt_stagger_size(3) + 1;
+        for i_fn = 1:numel(data_fns)
+            this_fn = data_fns{i_fn};
+            n_dim = ndims(data.(this_fn));
+            data_size = size(data.(this_fn));
+            if isequal(data_size, hk_wrf_sz(1:n_dim)) || isequal(data_size, bt_stagger_size(1:n_dim))
+                % Allow for the possibility of bottom_top being a staggered
+                % variable. We're cutting that down the same way Hugo did,
+                % which is to just take the bottom edge of each box. It
+                % would make more sense to average the top and bottom edges
+                % and get the box center eventually, but that would
+                % necessitate some modification to read_wrf_preproc to
+                % handle a "z_center" variable or something.
+                if DEBUG_LEVEL > 1
+                    fprintf('  Cutting down "%s" from WRF to CMAQ size\n', this_fn);
+                end
+                data.(this_fn) = data.(this_fn)(hk_x_cut, hk_y_cut, hk_z_cut);
+            elseif isequal(data_size, hk_cmaq_sz(1:n_dim)) || (strcmpi(this_fn, 'no2') && isequal(data_size(1:2), hk_cmaq_sz(1:2)))
+                % If the variable is NO2 then we need to ignore the third
+                % dimensions b/c we're adding the two extra necessary
+                % layers
+                if DEBUG_LEVEL > 1
+                    fprintf('  "%s" is already the proper size for CMAQ\n', this_fn);
+                end
+            else
+                E.callError('unknown_var_size', 'The "%s" variable is neither the size of a WRF variable nor a CMAQ variable', this_fn)
+            end
         end
+        
+        % Regardless of the size otherwise, we need to extend the CMAQ NO2
+        % profiles two more layers. Hugo said that WRF and CMAQ share the
+        % same model top, so that means as far as CMAQ is concerned, the
+        % top two WRF layers should have the same [NO2] as the top CMAQ
+        % layer.
+        n_extra_layers = numel(hk_z_cut) - size(data.NO2,3);
+        extra_no2_layers = repmat(data.NO2(:,:,end,:), 1, 1, n_extra_layers, 1);
+        data.NO2 = cat(3, data.NO2, extra_no2_layers);
+        
+     
     end
 
     function schema = match_cmaq_wrf_schema_grids(schema)
@@ -297,10 +364,21 @@ end
 
         if all_sizes_equal(schema)
             return
-        elseif isequal(size_from_schema(schema.NO2), hk_cmaq_sz) && isequal(size_from_schema(schema.LON), hk_cmaq_sz(1:2)) && isequal(size_from_schema(schema.LAT), hk_cmaq_sz(1:2)) && isequal(size_from_schema(schema.P), hk_wrf_sz) && isequal(size_from_schema(schema.PB), hk_wrf_sz) && isequal(size_from_schema(schema.T), hk_wrf_sz)
-            schema.P = set_schema_dims(schema.P, hk_cmaq_sz);
-            schema.PB = set_schema_dims(schema.PB, hk_cmaq_sz);
-            schema.T = set_schema_dims(schema.T, hk_cmaq_sz);
+        elseif isequal(size_from_schema(schema.NO2) + [0 0 2], hk_cmaq_sz)
+            % As long as the NO2 is the expected CMAQ size plus 2 for extra
+            % levels added to get the temperature profile up into the
+            % tropopause, go ahead and set all the other variables to be
+            % the CMAQ size
+            schema_fns = fieldnames(schema);
+            for i_fn = 1:numel(schema_fns)
+                this_fn = schema_fns{i_fn};
+                if strcmpi(this_fn, 'no2')
+                    flag_args = {'force'};
+                else
+                    flag_args = {};
+                end
+                schema.(this_fn) = set_schema_dims(schema.(this_fn), hk_wrf_sz, hk_cmaq_sz, flag_args{:});
+            end
         else
             E.callError('undef_grid', 'No subsetting defined for CMAQ/WRF grid sizes of %s vs. %s', mat2str(size_from_schema(schema.NO2)), mat2str(size_from_schema(schema.P)));
         end
@@ -353,19 +431,98 @@ xx = find(sz > 1, 1, 'last');
 sz = sz(1:xx);
 end
 
-function schema = set_schema_dims(schema, sz)
+function schema = set_schema_dims(schema, starting_size, desired_size, varargin)
 E = JLLErrors;
+p = advInputParser;
+p.addFlag('force');
+p.parse(varargin{:});
+pout = p.Results;
+
+force_to_cmaq_dims = pout.force;
+
 if numel(schema.Dimensions) ~= numel(schema.Variables.Dimensions)
     E.callError('dim_mismatch', 'Number of root dimensions is different from the number of %s dimensions in %s', schema.Filename, schema.Variables.Name);
 end
-for i=1:numel(schema.Dimensions)
-    if i > numel(sz)
+
+n_dims = numel(schema.Dimensions);
+
+for i=1:n_dims
+    if i > numel(desired_size)
+        % If this dimension does not have a desired size, set it to 1,
+        % since in Matlab an extra dimension at the end of the array is
+        % considered to have length 1.
         sz_i = 1;
     else
-        sz_i = sz(i);
+        sz_i = desired_size(i);
     end
-    schema.Dimensions(i).Length = sz_i;
-    schema.Variables.Dimensions(i).Length = sz_i;
+    
+    
+    
+    if i > numel(starting_size)
+        chk_sz_i = 1;
+    else
+        chk_sz_i = starting_size(i);
+    end
+    
+    if force_to_cmaq_dims || schema.Dimensions(i).Length == sz_i || schema.Dimensions(i).Length == chk_sz_i
+        % Whether it is the expected starting (WRF) size or target (CMAQ)
+        % size, we can set it - this avoids an extra elseif. But if it is
+        % neither of those lengths, then something unexpected is going on,
+        % and we don't want to make any assumptions. We can override this
+        % to force this to set the schema dims to the CMAQ dims, which we
+        % usually need to do for NO2 b/c we're adding two levels that
+        % aren't in the CMAQ output.
+        schema.Dimensions(i).Length = sz_i;
+    elseif (schema.Dimensions(i).Length == sz_i + 1 || schema.Dimensions(i).Length == chk_sz_i + 1) && regcmp(schema.Dimensions(i).Name, '.*stag')
+        % When Hugo sent me the first draft of PH and PHB variables, they
+        % were subset in such a way that the lower edge of each box was
+        % given, but not necessarily the upper edge. This mimics that.
+        schema.Dimensions(i).Name = strrep(schema.Dimensions(i).Name, 'stag', 'lower_edge');
+        schema.Dimensions(i).Length = sz_i;
+    elseif schema.Dimensions(i).Length > 1 && i == n_dims
+        % LAT and LON will have the third dimension be time, which should
+        % be length 1, in general, a dimension doesn't match but is only 1
+        % long it's probably okay if it is the last dimension because this
+        % variable has fewer dims than the others
+        E.callError('schema_global_dim_error', 'The dimension "%s" from file %s is length %d; neither the expected WRF (%d) nor CMAQ (%d) length',...
+            schema.Dimensions(i).Name, schema.Filename, schema.Dimensions(i).Length, chk_sz_i, sz_i)
+    end
+    
+    
+    if force_to_cmaq_dims || schema.Variables.Dimensions(i).Length == sz_i || schema.Variables.Dimensions(i).Length == chk_sz_i
+        schema.Variables.Dimensions(i).Length = sz_i;
+    elseif (schema.Variables.Dimensions(i).Length == sz_i + 1 || schema.Variables.Dimensions(i).Length == chk_sz_i + 1) && regcmp(schema.Variables.Dimensions(i).Name, '.*stag')
+        schema.Variables.Dimensions(i).Name = strrep(schema.Dimensions(i).Name, 'stag', 'lower_edge');
+        schema.Variables.Dimensions(i).Length = sz_i;
+    elseif schema.Variables.Dimensions(i).Length > 1
+        E.callError('schema_global_dim_error', 'The dimension "%s" in variable "%s" from file %s is length %d; neither the expected WRF (%d) nor CMAQ (%d) length',...
+            schema.Variables.Dimensions(i).Name, schema.Variables.Name, schema.Filename, schema.Variables.Dimensions(i).Length, chk_sz_i, sz_i)
+    end
+end
+end
+
+function base_schema = make_new_schema(base_schema, var_name, attribute_changes)
+% Since Matlab does copy-on-write, we can just edit the given schema and
+% return it
+E = JLLErrors;
+base_schema.Variables.Name = var_name;
+if isempty(base_schema.Variables.Attributes)
+    att_names = {};
+else
+    att_names = {base_schema.Variables.Attributes.Name};
+end
+
+for i_att = 1:2:numel(attribute_changes)
+    xx_att = strcmp(att_names, attribute_changes{i_att});
+    if sum(xx_att) < 1
+        fprintf('No attribute named "%s" exists in the schema, creating\n', attribute_changes{i_att});
+        base_schema.Variables.Attributes(end+1).Name = attribute_changes{i_att};
+        base_schema.Variables.Attributes(end).Value = attribute_changes{i_att+1};
+    elseif sum(xx_att) > 1
+        E.callError('multiple_atts_matched', 'Multiple attributes named "%s" exist in the schema', attribute_changes{i_att});
+    else
+        base_schema.Variables.Attributes(xx_att).Value = attribute_changes{i_att+1};
+    end
 end
 end
 
@@ -376,7 +533,10 @@ function check_symlink(link_file, path_date)
 % date. 
 
 E = JLLErrors;
-
+% For some reason, readlink doesn't work if you use ~ for the home
+% directory
+homedir = getenv('HOME');
+link_file = strrep(link_file, '~', homedir);
 [stat, link_path] = system(sprintf('readlink "%s"', link_file));
 if stat ~= 0
     return

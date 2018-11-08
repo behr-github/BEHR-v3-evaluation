@@ -14,12 +14,18 @@ function [ dataset, fill_value, scale_factor, offset ] = h5readomi( filename, da
 %
 %   must be met for VAL to be considered a fill value. Defaults to 0.001.
 %
+%   [ ___ ] = H5READOMI( ___, 'keep_type', true ) will keep the native type
+%   of the value, rather than convert to a double. Note that integer types
+%   will not have fill values replaced with NaNs, because they do not
+%   support NaNs.
+%
 %   [ DATASET, FILL_VALUE, SCALE_FACTOR, OFFSET ] = H5READOMI( __ ) returns
 %   the other attributes as well as the dataset.
 
 E = JLLErrors;
 p = inputParser;
 p.addParameter('fill_crit',0.001);
+p.addParameter('keep_type', false);
 p.parse(varargin{:});
 pout = p.Results;
 
@@ -28,13 +34,28 @@ if ~isnumeric(fill_crit) || ~isscalar(fill_crit) || fill_crit <= 0
     E.badinput('FILL_CRIT must be a positive, scalar number')
 end
 
-dataset = double(h5read(filename, datasetname));
-fill_value = double(h5readatt(filename, datasetname, '_FillValue'));
-scale_factor = double(h5readatt(filename, datasetname, 'ScaleFactor'));
-offset = double(h5readatt(filename, datasetname, 'Offset'));
+keep_type = pout.keep_type;
+if ~islogical(keep_type) || ~isscalar(keep_type)
+    E.badinput('KEEP_TYPE muts be a scalar logical')
+end
 
-fills = abs((dataset - fill_value) ./ fill_value) < fill_crit;
-dataset(fills) = nan;
+dataset = h5read(filename, datasetname);
+fill_value = h5readatt(filename, datasetname, '_FillValue');
+scale_factor = h5readatt(filename, datasetname, 'ScaleFactor');
+offset = h5readatt(filename, datasetname, 'Offset');
+
+if ~keep_type
+    dataset = double(dataset);
+    fill_value = double(fill_value);
+    scale_factor = double(scale_factor);
+    offset = double(offset);
+end
+
+if ~isinteger(dataset)
+    fills = abs((dataset - fill_value) ./ fill_value) < fill_crit;
+    dataset(fills) = nan;
+end
+
 dataset = (dataset*scale_factor) - offset;
 
 % I can't find any source that explicitly indicates whether scale or offset

@@ -424,7 +424,7 @@ end
             wrf_lon = ncread(wrf_info.Filename, varname);
             varname = 'XLAT';
             wrf_lat = ncread(wrf_info.Filename, varname);
-            [~,wrf_tropopres] = find_wrf_tropopause( wrf_info );
+            [~,wrf_tropopres] = find_wrf_tropopause( wrf_info, 'error_if_missing_units', error_if_missing_attr );
         catch err
             if strcmp(err.identifier,'MATLAB:imagesci:netcdf:unknownLocation')
                 E.callCustomError('ncvar_not_found',varname,F(1).name);
@@ -436,7 +436,9 @@ end
         % extrapolation wrf tropopause pressure when it's equal to 0
         tropopause_interp_indx = (wrf_tropopres == 0);
 
-        if any(tropopause_interp_indx(:)) 
+        if all(tropopause_interp_indx(:))
+            E.notimplemented('No tropopause values found - no method to recover has been implemented')
+        elseif any(tropopause_interp_indx(:)) 
             indx_nan = isnan(wrf_tropopres);
             wrf_tropopres(tropopause_interp_indx) = nan;
             
